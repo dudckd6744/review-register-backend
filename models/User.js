@@ -1,5 +1,7 @@
 const mongoose = require('mongoose');
 const bcrypt = require('bcrypt');
+const jwt = require("jsonwebtoken");
+const moment = require('moment');
 const saltRounds = 10;
 
 const userSchema =  mongoose.Schema({
@@ -14,7 +16,7 @@ const userSchema =  mongoose.Schema({
     },
     password: {
         type: String,
-        maxlength: 50
+        maxlength: 80
     },
     lastname: {
         type: String,
@@ -46,10 +48,45 @@ userSchema.pre('save', function( next ){
                 next()
             })
         })
+    }else{
+        next()
     }
-    
-
 })
+
+userSchema.methods.comparePassword = function(plainPassword, cb){
+    console.log(plainPassword, this.password)
+
+    bcrypt.compare(plainPassword, this.password, function(err,isMatch){
+        if(err) return cb(err);
+        cb(null, isMatch);
+    })
+}
+
+userSchema.methods.generateToken = function(cb){
+
+    var user =  this;
+
+    var token = jwt.sign(user._id.toHexString(),'secretToken')
+    var oneHour = moment().add(1, 'hour').valueOf();
+    console.log("11",oneHour,"@22",user)
+    user.tokenExp = oneHour;
+    user.token = token;
+    user.save(function(err,user){
+        if(err) return cb(err)
+        cb(null, user)
+    })
+}
+
+userSchema.statics.findByToken= function(token , cb){
+    var user= this;
+
+    jwt.verify(token, 'secretToken', function(err,decoded){
+        User.findOne({ "_id":decoded, "token":token}, function(err,user){
+            if(err) return cb(err);
+            cb(null ,user)
+        })
+    })
+}
 
 const User = mongoose.model('User', userSchema)
 
